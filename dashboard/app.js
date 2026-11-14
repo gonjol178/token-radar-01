@@ -374,7 +374,10 @@
     function slider(id, label, min, max, step, value, oninput) {
       var out = el('b', { text: String(value) });
       var input = el('input', { type: 'range', id: id, min: String(min), max: String(max), step: String(step), value: String(value), 'aria-label': label });
+      // 'input' moves the label live; 'change' (on release) re-ranks, so dragging never
+      // rebuilds the slider under the pointer.
       input.addEventListener('input', function () { oninput(parseFloat(input.value)); out.textContent = input.value; });
+      input.addEventListener('change', function () { setActive(); });
       return el('div', { class: 'slider' }, el('label', { for: id }, el('span', { text: label }), out), input);
     }
     function setActive() {
@@ -388,10 +391,10 @@
       el('h2', { text: 'Model sandbox: change the constants, watch the board re-rank' }),
       el('p', { class: 'sub', text: 'The same function, your constants. The sandbox changes only this page: the submitted board keeps the model above.' }),
       el('div', { class: 'sliders' },
-        slider('sb-base', 'Base multiple (TVL share)', 0.1, 0.5, 0.05, sandbox.base, function (v) { sandbox.base = v; setActive(); }),
-        slider('sb-weight', 'Growth weight', 0, 1, 0.1, sandbox.weight, function (v) { sandbox.weight = v; setActive(); }),
-        slider('sb-cap', 'Growth cap (%)', 50, 300, 25, sandbox.cap, function (v) { sandbox.cap = v; setActive(); }),
-        slider('sb-floor', 'Maturity floor', 0.4, 0.8, 0.05, sandbox.floor, function (v) { sandbox.floor = v; setActive(); })
+        slider('sb-base', 'Base multiple (TVL share)', 0.1, 0.5, 0.05, sandbox.base, function (v) { sandbox.base = v; }),
+        slider('sb-weight', 'Growth weight', 0, 1, 0.1, sandbox.weight, function (v) { sandbox.weight = v; }),
+        slider('sb-cap', 'Growth cap (%)', 50, 300, 25, sandbox.cap, function (v) { sandbox.cap = v; }),
+        slider('sb-floor', 'Maturity floor', 0.4, 0.8, 0.05, sandbox.floor, function (v) { sandbox.floor = v; })
       ),
       el('div', null, reset),
       sandbox.active ? el('p', { class: 'sandbox-note', text: 'Sandbox on: the Implied value column shows your constants. Reset to see the submitted board again.' }) : null

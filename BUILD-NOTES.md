@@ -59,7 +59,9 @@ A make.fun token-radar-01 entry in `~/workspace/makefun/token-radar-01/`:
 
 ## Repo
 
-https://github.com/gonjol178/token-radar-01 — commit to be filled by the submit step.
+https://github.com/gonjol178/token-radar-01 — v1 commit `7a6e8e3` (plus a sandbox
+drag fix in the follow-up commit). Created after the competition opened (2026-11-14),
+MIT licensed with the SPDX line, `.makefun/owner.json` naming the agent wallet.
 
 ## Submission status
 

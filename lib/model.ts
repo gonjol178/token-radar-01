@@ -366,12 +366,75 @@ function holdWindow(age: number | null): number {
   return 30;
 }
 
+/**
+ * The family a protocol's main chain belongs to, from the chain's own name. Farm steps are
+ * written per family, because moving funds and paying for transactions on Ethereum mainnet,
+ * on a rollup, on Solana, on BNB Chain, on Polygon and on Bitcoin are different jobs: the
+ * bridge in, the wait to bridge back and the fee shape all differ. A chain no family claims
+ * keeps the neutral wording.
+ */
+type ChainFamily = 'ethereum' | 'optimistic' | 'zk' | 'solana' | 'bnb' | 'polygon' | 'bitcoin' | 'other';
+
+const OPTIMISTIC_CHAINS = ['arbitrum', 'optimism', 'base', 'mantle', 'mode', 'blast', 'ink', 'world chain', 'unichain', 'soneium', 'lisk'];
+const ZK_CHAINS = ['zksync', 'linea', 'scroll', 'starknet', 'polygon zkevm'];
+
+function chainFamily(p: SnapshotProtocol): ChainFamily {
+  const chain = firstChain(p).toLowerCase();
+  if (chain === 'ethereum') return 'ethereum';
+  if (chain.includes('solana')) return 'solana';
+  if (chain.includes('binance') || chain === 'bsc' || chain.includes('op_bnb') || chain.includes('opbnb')) return 'bnb';
+  if (chain === 'polygon') return 'polygon';
+  if (chain === 'bitcoin') return 'bitcoin';
+  if (OPTIMISTIC_CHAINS.some((name) => chain.includes(name))) return 'optimistic';
+  if (ZK_CHAINS.some((name) => chain.includes(name))) return 'zk';
+  return 'other';
+}
+
 /** What one transaction costs on the protocol's main chain, in the words a farmer budgets by. */
 function feeNote(p: SnapshotProtocol): string {
-  const chain = firstChain(p).toLowerCase();
-  if (chain.includes('ethereum')) return 'about $3 to $8 of gas a transaction on Ethereum';
-  if (chain.includes('solana')) return 'under $0.10 of gas a transaction on Solana';
-  return 'about $0.50 to $2 of gas a transaction on this chain';
+  switch (chainFamily(p)) {
+    case 'ethereum': return 'about $3 to $8 of gas a transaction on Ethereum';
+    case 'solana': return 'under $0.10 of gas a transaction on Solana';
+    case 'bnb': return 'about $0.10 to $0.50 of gas a transaction on BNB Chain';
+    case 'polygon': return 'about $0.05 to $0.30 of gas a transaction on Polygon';
+    case 'optimistic':
+    case 'zk': return 'about $0.05 to $0.50 of gas a transaction on this layer 2';
+    case 'bitcoin': return 'a network fee that moves with mempool congestion on Bitcoin';
+    default: return 'about $0.50 to $2 of gas a transaction on this chain';
+  }
+}
+
+/** What a week of small qualifying actions costs on the protocol's main chain. */
+function weeklyFeeNote(p: SnapshotProtocol): string {
+  switch (chainFamily(p)) {
+    case 'ethereum': return 'about $3 to $8 of gas a week';
+    case 'solana': return 'under $0.10 of gas a week';
+    case 'bnb': return 'about $0.10 to $0.50 of gas a week';
+    case 'polygon': return 'about $0.05 to $0.30 of gas a week';
+    case 'optimistic':
+    case 'zk': return 'about $0.05 to $0.50 of gas a week';
+    case 'bitcoin': return 'one network fee a week, set by mempool congestion';
+    default: return 'about $2 of gas a week';
+  }
+}
+
+/**
+ * How funds reach the protocol's main chain and how they leave it, per chain family. This
+ * sentence rides on the opening move, so a plan that starts on a rollup warns about the
+ * bridge back before the farmer has anything to withdraw.
+ */
+function chainMoveNote(p: SnapshotProtocol): string {
+  const chain = firstChain(p);
+  switch (chainFamily(p)) {
+    case 'ethereum': return 'Funds settle directly on Ethereum, so batch the setup into as few transactions as the app allows.';
+    case 'optimistic': return 'Bridge the funds in from Ethereum first (about ten minutes); a bridge back takes about seven days, so plan to leave the position on the rollup until the holding window ends.';
+    case 'zk': return 'Bridge the funds in from Ethereum first (about ten minutes); a bridge back settles once the validity proof posts, typically within a day.';
+    case 'solana': return 'No bridge is needed once the wallet is funded on Solana: transfers settle in seconds, so the position can open in one session.';
+    case 'bnb': return 'Move the funds onto BNB Chain once at the start; transfers then settle in a few seconds, so later actions never wait on a bridge.';
+    case 'polygon': return 'Bridge the funds in from Ethereum first (about ten minutes through the Polygon bridge); transfers then settle in seconds for a few cents.';
+    case 'bitcoin': return 'Send the funds in one transaction and wait for at least one confirmation (about ten minutes a block) before the first action.';
+    default: return `Move the funds onto ${chain} once at the start, and check the bridge or transfer time before the first action so the position opens in one session.`;
+  }
 }
 
 /** A move's wording, from the protocol's name, stake and chain. */
@@ -430,7 +493,10 @@ function followUpMove(p: SnapshotProtocol, chain: string): string {
 /**
  * A protocol's farm plan: seven steps, each an action with a cost and a time. The plan is derived
  * from the protocol's own record (category, chains, TVL, age), never from a hand-written list of
- * names. Every step names what it costs and how long it takes.
+ * names. Every step names what it costs and how long it takes. The opening move also carries a
+ * note for the main chain's family (how funds arrive, how long a bridge back takes), and the
+ * weekly step is priced in that family's fees, so a plan on Ethereum reads differently from
+ * the same category's plan on a rollup or on Solana.
  */
 export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
   const chain = firstChain(p);
@@ -440,9 +506,9 @@ export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
   const step = (text: string, cost: string, time: string): FarmStep => ({ text, cost, time });
   return [
     step(`Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.`, 'under $3 of gas for the first transaction', '5 minutes'),
-    step(openingMove(p, capital, chain), `$${capital} of capital and ${fee}`, '15 minutes to set up'),
+    step(`${openingMove(p, capital, chain)} ${chainMoveNote(p)}`, `$${capital} of capital and ${fee}`, '15 minutes to set up'),
     step(followUpMove(p, chain), fee, '10 minutes'),
-    step(`Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.`, 'about $2 of gas a week', '10 minutes a week'),
+    step(`Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.`, weeklyFeeNote(p), '10 minutes a week'),
     step(`Hold the position for at least ${hold} days so the activity is counted in more than one snapshot.`, `the $${capital} stays in the position`, `${hold} days`),
     step(`Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes.`, 'no fee to check, and never pay to claim', '10 minutes'),
     step(`Write the wallet, the dates and every transaction in a farm log so you can repeat the position or unwind it.`, 'nothing but the log', '5 minutes'),

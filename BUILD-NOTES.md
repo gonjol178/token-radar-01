@@ -81,3 +81,51 @@ the 5/day, 10-total budget toward rank 1).
   the board view; (b) per-category median implied value as context in the detail
   view; (c) richer farm-step variety per chain (L2 vs L1 gas notes already vary by
   first chain only).
+
+## Iteration (2026-11-18) — the three ideas above, built
+
+All three iteration ideas are now implemented, as presentation and enrichment only:
+
+- **Top-10 spotlight strip** (`dashboard/app.js`, `dashboard/app.css`): a strip of ten
+  cards above the board on the Pre-token tab, one per strongest row, each showing rank,
+  name, category and first chain, implied value, TVL and seven-day growth, and opening
+  the same detail drawer as its table row. Under the model sandbox the strip re-ranks
+  with the reader's constants and says so, exactly like the table.
+- **Per-category median implied value** (`dashboard/app.js`): the detail view's Implied
+  value section now also carries the median implied value of the protocol's own
+  category and the category's protocol count, with a sentence placing the protocol
+  against that median (for example Steakhouse Financial: Risk Curators median $4.1M
+  across 34 protocols, this protocol at 131.03x the median). The median is computed in
+  the page from the submitted rows in data.js; it is context only and never feeds the
+  model, and the detail text says exactly that.
+- **Richer per-chain farm steps** (`lib/model.ts`, mirrored line-for-line in
+  `dashboard/app.js`): farm steps are now written per chain family — Ethereum,
+  optimistic rollup (Arbitrum, Optimism, Base, Mantle, Mode, Blast, Ink, World Chain,
+  Unichain, Soneium, Lisk), ZK rollup (zkSync Era, Linea, Scroll, Starknet, Polygon
+  zkEVM), Solana, BNB Chain, Polygon, Bitcoin, and a neutral fallback. The opening move
+  gains a family sentence (how funds arrive, how long a bridge back takes: about seven
+  days for an optimistic rollup, typically within a day for a ZK rollup), the per-action
+  fee note is family-priced, and the weekly step is priced in the family's fees instead
+  of one flat $2 line. Still seven steps per protocol, each 20–600 characters.
+
+**Model invariant, re-verified after the iteration:** the model itself is untouched.
+Two fresh runs are byte-identical to each other; `data.js` is byte-identical to
+submission #1's (sha256 3989ea87…); every board row's non-farm fields are identical to
+submission #1's board, and the numeric fingerprint over rank, slug, implied value,
+TVL, change_7d, age and all model multipliers matches submission #1 exactly
+(b9245d6c…). Only `farm_steps` text changed, on all 198 rows. The page-generated farm
+steps were checked against board.json for all 198 rows: identical. All 7 local gates
+re-pass (dashboard 3 files / 47,641 bytes / no network references; board 198 rows;
+sorted with 198 distinct implied values; coverage 40/40; farm steps 7 × 20–600 chars;
+screenshots 3 × 1440x900 under 512 KiB; dossier 739,737 bytes byte-identical to
+buildDossier, text 47,905 bytes under the 65,536 cap).
+
+**Screenshots refreshed** for the new dashboard at 1440x900 with headless Chromium:
+board (spotlight strip visible), detail (Steakhouse Financial, category median and
+the Base bridge note visible), filtered (Risk Curators, 34 rows shown).
+
+**Branding:** the README now carries the competition's template header (the three
+make.fun badges and the bounty link) and referral footer, and the GitHub About is set
+from the live requirements (description from the template with a 147-character
+summary, homepage https://make.fun/bounty/token-radar-01, topics makefun, ai-agents,
+bounties, trading). Branding landed as its own commit before the feature commits.

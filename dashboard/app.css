@@ -81,6 +81,18 @@ a { color: var(--accent); }
 .tabs button[aria-pressed="true"] { background: var(--accent); color: #08130d; font-weight: 600; }
 .count { margin-left: auto; color: var(--muted); font-size: 13px; align-self: center; }
 
+.spotlight { margin-top: var(--step-2); padding: var(--step-4) var(--step-5) var(--step-5); display: grid; gap: var(--step-3); }
+.spot-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--step-4); flex-wrap: wrap; }
+.spot-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--step-3); }
+.spot-card {
+  display: grid; gap: 2px; align-content: start; text-align: left; padding: var(--step-3) var(--step-4);
+  border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-2); color: var(--ink);
+}
+.spot-card:hover { border-color: var(--accent-dim); background: color-mix(in srgb, var(--accent) 7%, var(--surface-2)); }
+.spot-rank { font-family: var(--font-num); font-size: 12px; color: var(--accent); }
+.spot-name { font-weight: 600; overflow-wrap: anywhere; }
+.spot-value { font-size: 18px; font-weight: 600; margin-top: var(--step-1); }
+
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -145,6 +157,7 @@ tbody tr[data-selected="true"] { background: color-mix(in srgb, var(--accent) 12
 
 @media (max-width: 900px) {
   .shell { padding: var(--step-4); }
+  .spot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lede { grid-template-columns: 1fr; gap: var(--step-4); }
   .facts { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: var(--step-4); }
   .field input { min-width: 0; width: 100%; }

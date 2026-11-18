@@ -53,6 +53,23 @@
     return sandbox.active ? impliedOf(row, sandboxModel()) : row.implied_value_usd;
   }
 
+  // Category context for the detail view: the median implied value of every board row that
+  // shares this row's category, from the submitted values in data.js. It is context beside
+  // the model's own number, never an input to it: the model scores each protocol alone,
+  // and this median is computed in the page from the same rows the board shows.
+  function categoryPeers(row) {
+    return DATA.rows.filter(function (r) { return r.category === row.category; });
+  }
+  function categoryMedian(row) {
+    var values = categoryPeers(row).map(function (r) { return r.implied_value_usd; }).sort(function (a, b) { return a - b; });
+    if (values.length === 0) return null;
+    var mid = Math.floor(values.length / 2);
+    return values.length % 2 === 1 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
+  }
+  function categoryLabel(row) {
+    return row.category || 'Uncategorised';
+  }
+
   function el(tag, attrs) {
     var node = document.createElement(tag);
     if (attrs) {
@@ -89,11 +106,54 @@
     if (age < 365) return 45;
     return 30;
   }
-  function gasNote(p) {
+  // The chain family decides the farm plan's fee wording and its bridge note, exactly as in
+  // lib/model.ts: Ethereum mainnet, an optimistic rollup, a ZK rollup, Solana, BNB Chain,
+  // Polygon and Bitcoin each move funds and charge fees differently, and a chain no family
+  // claims keeps the neutral wording.
+  function chainFamily(p) {
     var chain = chainOf(p).toLowerCase();
-    if (chain.indexOf('ethereum') >= 0) return 'about $3 to $8 of gas a transaction on Ethereum';
-    if (chain.indexOf('solana') >= 0) return 'under $0.10 of gas a transaction on Solana';
+    if (chain === 'ethereum') return 'ethereum';
+    if (chain.indexOf('solana') >= 0) return 'solana';
+    if (chain.indexOf('binance') >= 0 || chain === 'bsc' || chain.indexOf('op_bnb') >= 0 || chain.indexOf('opbnb') >= 0) return 'bnb';
+    if (chain === 'polygon') return 'polygon';
+    if (chain === 'bitcoin') return 'bitcoin';
+    var optimistic = ['arbitrum', 'optimism', 'base', 'mantle', 'mode', 'blast', 'ink', 'world chain', 'unichain', 'soneium', 'lisk'];
+    for (var i = 0; i < optimistic.length; i++) if (chain.indexOf(optimistic[i]) >= 0) return 'optimistic';
+    var zk = ['zksync', 'linea', 'scroll', 'starknet', 'polygon zkevm'];
+    for (var j = 0; j < zk.length; j++) if (chain.indexOf(zk[j]) >= 0) return 'zk';
+    return 'other';
+  }
+  function gasNote(p) {
+    var family = chainFamily(p);
+    if (family === 'ethereum') return 'about $3 to $8 of gas a transaction on Ethereum';
+    if (family === 'solana') return 'under $0.10 of gas a transaction on Solana';
+    if (family === 'bnb') return 'about $0.10 to $0.50 of gas a transaction on BNB Chain';
+    if (family === 'polygon') return 'about $0.05 to $0.30 of gas a transaction on Polygon';
+    if (family === 'optimistic' || family === 'zk') return 'about $0.05 to $0.50 of gas a transaction on this layer 2';
+    if (family === 'bitcoin') return 'a network fee that moves with mempool congestion on Bitcoin';
     return 'about $0.50 to $2 of gas a transaction on this chain';
+  }
+  function weeklyGasNote(p) {
+    var family = chainFamily(p);
+    if (family === 'ethereum') return 'about $3 to $8 of gas a week';
+    if (family === 'solana') return 'under $0.10 of gas a week';
+    if (family === 'bnb') return 'about $0.10 to $0.50 of gas a week';
+    if (family === 'polygon') return 'about $0.05 to $0.30 of gas a week';
+    if (family === 'optimistic' || family === 'zk') return 'about $0.05 to $0.50 of gas a week';
+    if (family === 'bitcoin') return 'one network fee a week, set by mempool congestion';
+    return 'about $2 of gas a week';
+  }
+  function chainMoveNote(p) {
+    var chain = chainOf(p);
+    var family = chainFamily(p);
+    if (family === 'ethereum') return 'Funds settle directly on Ethereum, so batch the setup into as few transactions as the app allows.';
+    if (family === 'optimistic') return 'Bridge the funds in from Ethereum first (about ten minutes); a bridge back takes about seven days, so plan to leave the position on the rollup until the holding window ends.';
+    if (family === 'zk') return 'Bridge the funds in from Ethereum first (about ten minutes); a bridge back settles once the validity proof posts, typically within a day.';
+    if (family === 'solana') return 'No bridge is needed once the wallet is funded on Solana: transfers settle in seconds, so the position can open in one session.';
+    if (family === 'bnb') return 'Move the funds onto BNB Chain once at the start; transfers then settle in a few seconds, so later actions never wait on a bridge.';
+    if (family === 'polygon') return 'Bridge the funds in from Ethereum first (about ten minutes through the Polygon bridge); transfers then settle in seconds for a few cents.';
+    if (family === 'bitcoin') return 'Send the funds in one transaction and wait for at least one confirmation (about ten minutes a block) before the first action.';
+    return 'Move the funds onto ' + chain + ' once at the start, and check the bridge or transfer time before the first action so the position opens in one session.';
   }
   function actionFor(p, capital, chain) {
     var c = (p.category || '').toLowerCase();
@@ -139,9 +199,9 @@
     var gas = gasNote(p);
     return [
       { text: 'Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.', cost: 'under $3 of gas for the first transaction', time: '5 minutes' },
-      { text: actionFor(p, capital, chain), cost: '$' + capital + ' of capital and ' + gas, time: '15 minutes to set up' },
+      { text: actionFor(p, capital, chain) + ' ' + chainMoveNote(p), cost: '$' + capital + ' of capital and ' + gas, time: '15 minutes to set up' },
       { text: secondActionFor(p, chain), cost: gas, time: '10 minutes' },
-      { text: 'Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.', cost: 'about $2 of gas a week', time: '10 minutes a week' },
+      { text: 'Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.', cost: weeklyGasNote(p), time: '10 minutes a week' },
       { text: 'Hold the position for at least ' + hold + ' days so the activity is counted in more than one snapshot.', cost: 'the $' + capital + ' stays in the position', time: hold + ' days' },
       { text: "Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes.", cost: 'no fee to check, and never pay to claim', time: '10 minutes' },
       { text: 'Write the wallet, the dates and every transaction in a farm log so you can repeat the position or unwind it.', cost: 'nothing but the log', time: '5 minutes' }
@@ -219,6 +279,36 @@
         el('div', { class: 'fact' }, el('span', { text: 'Products set aside' }), el('b', { text: String(DATA.excluded_size) })),
         el('div', { class: 'fact' }, el('span', { text: 'Live-token protocols set aside' }), el('b', { text: String(DATA.live_size) }))
       )
+    );
+  }
+
+  // The spotlight strip: the board's ten strongest rows as cards above the table, so a
+  // reader who only has a minute sees where the model puts the value before scrolling.
+  // The cards follow the table's own numbers — under the sandbox they re-rank with the
+  // reader's constants, and the strip says so — and each card opens the same detail
+  // drawer as its table row.
+  function spotlightStrip() {
+    var top = DATA.rows.slice().sort(function (a, b) {
+      var diff = shownImplied(b) - shownImplied(a);
+      return diff !== 0 ? diff : (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0);
+    }).slice(0, 10);
+    var cards = top.map(function (r, i) {
+      var growthClass = r.change_7d === null ? '' : r.change_7d >= 0 ? 'pos' : 'neg';
+      return el('button', { type: 'button', class: 'spot-card', onclick: function () { openDetail(r.slug); } },
+        el('span', { class: 'spot-rank', text: '#' + (i + 1) }),
+        el('b', { class: 'spot-name', text: r.name }),
+        el('span', { class: 'sub', text: (r.category || 'Other') + ' on ' + (r.chains && r.chains.length ? r.chains[0] : 'an unnamed chain') }),
+        el('span', { class: 'spot-value num', text: fmtUsd(shownImplied(r)) }),
+        el('span', { class: 'sub', text: 'TVL ' + fmtUsd(r.tvl_usd) + ' · 7d ' }),
+        el('span', { class: 'sub num ' + growthClass, text: fmtPct(r.change_7d) })
+      );
+    });
+    return el('section', { class: 'panel spotlight', 'aria-label': 'Top ten spotlight' },
+      el('div', { class: 'spot-head' },
+        el('h2', { text: 'Top 10 spotlight' }),
+        el('span', { class: 'sub', text: sandbox.active ? 'Ranked by your sandbox constants, not the submitted board.' : 'The ten strongest implied values on the submitted board. Select a card for its model and farm plan.' })
+      ),
+      el('div', { class: 'spot-grid' }, cards)
     );
   }
 
@@ -420,6 +510,9 @@
       ),
       el('button', { class: 'close', type: 'button', 'aria-label': 'Close details', text: 'Close', onclick: function () { dialog.close(); } })
     ));
+    var peers = categoryPeers(row);
+    var median = categoryMedian(row);
+    var medianRatio = median !== null && median > 0 ? row.implied_value_usd / median : null;
     dialog.appendChild(el('section', { class: 'detail-section' },
       el('h3', { text: 'Implied value' }),
       el('div', { class: 'equation' },
@@ -428,9 +521,14 @@
         el('div', null, el('span', { text: 'Age with no token' }), el('b', { class: 'num', text: fmtAge(row.age_days) })),
         el('div', null, el('span', { text: 'Growth multiplier' }), el('b', { class: 'num', text: String(row.growth_multiplier) })),
         el('div', null, el('span', { text: 'Maturity multiplier' }), el('b', { class: 'num', text: String(row.maturity_multiplier) })),
-        el('div', null, el('span', { text: 'Implied value' }), el('b', { class: 'num', text: fmtUsd(row.implied_value_usd) }))
+        el('div', null, el('span', { text: 'Implied value' }), el('b', { class: 'num', text: fmtUsd(row.implied_value_usd) })),
+        el('div', null, el('span', { text: categoryLabel(row) + ' median implied' }), el('b', { class: 'num', text: median === null ? 'n/a' : fmtUsd(median) })),
+        el('div', null, el('span', { text: 'Protocols in this category' }), el('b', { class: 'num', text: String(peers.length) }))
       ),
-      el('p', { class: 'sub', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. The page recomputes this row as ' + fmtUsd(recomputed) + (recomputed === row.implied_value_usd ? ', the same number board.json carries.' : ', which differs from the board: the data would be stale.') + ' This is an estimate, not a price.' })
+      el('p', { class: 'sub', text: 'Model ' + DATA.model_version + ': the same function scores every protocol. The page recomputes this row as ' + fmtUsd(recomputed) + (recomputed === row.implied_value_usd ? ', the same number board.json carries.' : ', which differs from the board: the data would be stale.') + ' This is an estimate, not a price.' }),
+      el('p', { class: 'sub', text: peers.length <= 1
+        ? 'Category context: this is the only ' + categoryLabel(row) + ' protocol on the board, so the category median is its own implied value.'
+        : 'Category context: across the ' + peers.length + ' ' + categoryLabel(row) + ' protocols on the board, the median implied value is ' + fmtUsd(median) + (medianRatio === null ? '.' : ', so this protocol sits at ' + medianRatio.toFixed(2) + 'x the median of its category.') + ' The median is context only: it never feeds the model, which scores this protocol on its own figures alone.' })
     ));
     dialog.appendChild(el('section', { class: 'detail-section' },
       el('h3', { text: 'Farm plan' }),
@@ -453,6 +551,7 @@
     var shell = el('div', { class: 'shell' });
     shell.appendChild(header());
     shell.appendChild(lede());
+    if (state.tab === 'pre-token') shell.appendChild(spotlightStrip());
     shell.appendChild(controls());
     shell.appendChild(state.tab === 'pre-token' ? boardTable() : state.tab === 'live' ? liveTable() : excludedTable());
     if (state.tab === 'pre-token') {
